@@ -1,11 +1,9 @@
 /**
  * Layout components barrel file.
  *
- * Structural layout building blocks (e.g. page shells, containers) will be
- * exported from here as they are introduced.
- *
- * Example (future use):
- * export { PageShell } from "./page-shell";
+ * Structural layout building blocks used across the app.
  */
 
-export {};
+export { AppShell } from "./app-shell";
+export { AppSidebar } from "./app-sidebar";
+export { SiteHeader } from "./site-header";
