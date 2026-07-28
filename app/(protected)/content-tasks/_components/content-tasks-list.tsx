@@ -1,7 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { Pencil, Search, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { FileText, Pencil, Search, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -179,6 +180,17 @@ export function ContentTasksList({
                   </TableCell>
                   <TableCell>
                     <div className="flex justify-end gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`View posts for ${task.title}`}
+                        asChild
+                      >
+                        <Link href={`/posts?contentTask=${task.id}`}>
+                          <FileText className="size-4" />
+                        </Link>
+                      </Button>
                       <ContentTaskFormDialog
                         campaignId={campaignId}
                         contentTask={task}

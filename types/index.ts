@@ -4,4 +4,4 @@
  * Cross-cutting types and interfaces used across the app.
  */
 
-export type { Agency, Campaign, Client, ContentTask, Database } from "./database";
+export type { Agency, Campaign, Client, ContentTask, Database, Post } from "./database";

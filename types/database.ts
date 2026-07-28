@@ -102,6 +102,30 @@ export type ContentTask = {
 };
 
 /**
+ * Row shape for the `public.posts` table (Phase 6 — Posts).
+ *
+ * `id` and `content_task_id` are both `int8` in the live database —
+ * `content_task_id` is a foreign key to `content_tasks.id` (also
+ * `int8`), NOT a `uuid` — same pattern as `content_tasks.campaign_id`
+ * -> `campaigns.id`.
+ *
+ * A Post is the actual piece of social media content that will later be
+ * generated, edited, and published. One Content Task can have many
+ * Posts (future ready). Kept to automation-essential fields only.
+ */
+export type Post = {
+  id: number;
+  content_task_id: number;
+  title: string;
+  caption: string | null;
+  platform: string;
+  status: string;
+  scheduled_date: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/**
  * Minimal Supabase Database type, hand-written to cover the tables this
  * app currently queries. Extend as new tables are introduced.
  *
@@ -245,6 +269,32 @@ export interface Database {
           priority?: string;
           status?: string;
           due_date?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      posts: {
+        Row: Post;
+        Insert: {
+          id?: number;
+          content_task_id: number;
+          title: string;
+          caption?: string | null;
+          platform?: string;
+          status?: string;
+          scheduled_date?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: number;
+          content_task_id?: number;
+          title?: string;
+          caption?: string | null;
+          platform?: string;
+          status?: string;
+          scheduled_date?: string | null;
           created_at?: string;
           updated_at?: string;
         };

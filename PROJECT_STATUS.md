@@ -414,9 +414,94 @@ Operations Platform.
       via `LoginForm`'s existing `redirectTo` handling. No UI or design
       change — navigation only.
 
+- [x] **Phase 6 — Posts**
+      Full post CRUD (create, edit, delete) scoped to a specific content
+      task, following the Content Task module's architecture exactly. A
+      Post is the actual piece of social media content that will later
+      be generated, edited, and published. Kept to automation-essential
+      fields only, per instruction: no AI generation, publishing APIs,
+      scheduling engine, analytics, approval workflow, notifications,
+      calendar, or file uploads.
+      - **Schema**: new table, `posts.id` and `.content_task_id` are
+        both `int8`, `content_task_id` a foreign key to
+        `content_tasks.id` (also `int8`) — same pattern as
+        `content_tasks.campaign_id` → `campaigns.id`. One Content Task
+        can have many Posts (future ready).
+        `supabase/migrations/0004_create_posts_table.sql` creates it
+        with RLS enabled and all four CRUD policies (select / insert /
+        update / delete) from the start, scoped through
+        `posts.content_task_id` → `content_tasks.campaign_id` →
+        `campaigns.client_id` → `clients.agency_id` →
+        `agencies.user_id = auth.uid()`.
+      - **Navigation decision**: same reasoning as Content Tasks — a
+        campaign can have many content tasks, and each content task has
+        its own posts, so there's no single implicit "the content task".
+        Resolved by adding a "View Posts" icon button to each row on
+        `/content-tasks`, linking to `/posts?contentTask={id}`. The
+        Posts page reads `?contentTask=` from the URL, verifies that
+        content task's campaign's client belongs to the current user's
+        agency (one hop further than Content Tasks' own check), and
+        shows that content task's posts. No content-task-switcher
+        dropdown or extra navigation UI was added, per the "don't add
+        unrequested features" instruction.
+      - `types/database.ts` — added `Post` type (`type` alias, not
+        `interface` — same reason as `Agency`/`Client`/`Campaign`/
+        `ContentTask`) and the `posts` table entry to `Database`,
+        `id`/`content_task_id` typed as `number` (`int8`), following the
+        exact `ContentTask` pattern.
+      - `lib/supabase/posts.ts` — read-only `getPostsForContentTask`,
+        mirroring `getContentTasksForCampaign`.
+      - `lib/supabase/content-tasks.ts` — added `getContentTaskById`
+        (new, small addition needed so the Posts page can resolve the
+        content task named in `?contentTask=`; everything else in this
+        file is untouched — same precedent as `getCampaignById` added to
+        `campaigns.ts` in Phase 5).
+      - `lib/supabase/post-types.ts` — `POST_STATUSES`
+        (`draft`/`scheduled`/`published`/`cancelled`), `POST_PLATFORMS`,
+        plus `PostFormValues`, `SavePostResult`, `DeletePostResult`,
+        `CleanedPostValues`. Mirrors `content-task-types.ts`.
+      - `lib/supabase/post-validation.ts` — `validatePostFormValues`
+        (required `title`, trims whitespace, defaults each enum field to
+        a safe value when the submitted value isn't recognized). Mirrors
+        `content-task-validation.ts`.
+      - `lib/supabase/post-actions.ts` — `"use server"` module exporting
+        **only** the three async Server Actions: `createPostRecord`,
+        `updatePostRecord`, `deletePostRecord` (mirrors the Content Task
+        module's `content-task-actions.ts`, including the same "only
+        async functions" module-boundary discipline). Ownership is
+        checked via `assertContentTaskOwnership`, four plain queries
+        (content task → campaign → client → agency) rather than a
+        PostgREST embedded/joined select, extending
+        `assertCampaignOwnership`'s three-query pattern one hop further
+        for the extra level in this module's ownership chain. Checks for
+        a case-insensitive duplicate title within the same content task
+        (excluding the current post on edit) before insert/update, with
+        a Postgres unique-violation (23505) catch as a fallback.
+      - `app/(protected)/content-tasks/_components/content-tasks-list.tsx`
+        — added the "View Posts" icon button described above; no other
+        change to this file.
+      - `app/(protected)/posts/_components/` — `post-form-dialog.tsx`
+        (Add/Edit: title, caption, platform, status, scheduled_date),
+        `delete-post-dialog.tsx`, `post-status-badge.tsx`,
+        `posts-list.tsx` (table, search-by-title, status filter, row
+        actions), `posts-empty-state.tsx`, `posts-error-state.tsx`,
+        `posts-needs-content-task-state.tsx` (shown when `?contentTask=`
+        is missing, invalid, or doesn't belong to the user's agency —
+        directs to `/content-tasks`).
+      - `app/(protected)/posts/page.tsx` — replaced the `PlaceholderPage`
+        with the real Server Component: resolves the content task from
+        `?contentTask=`, verifies ownership through its campaign's
+        client's agency, fetches that content task's posts, and renders
+        the appropriate state (needs-content-task / error / empty /
+        populated list).
+      - `content_task_id` is always taken from the resolved content task
+        (via the URL) and never exposed as a user-enterable field, per
+        the "one content task → many posts" rule and "never ask users to
+        manually enter IDs."
+
 ## Next
 
-- [ ] **Phase 6 — TBD** (not yet scoped)
+- [ ] **Phase 7 — TBD** (not yet scoped)
 
 ## Notes
 
@@ -499,3 +584,31 @@ Operations Platform.
   campaign's row — this takes you to `/content-tasks?campaign={id}`.
   Visiting `/content-tasks` directly with no `campaign` in the URL shows
   a "Select a campaign" state that links back to `/campaigns`.
+- **Run `supabase/migrations/0004_create_posts_table.sql`** in your
+  Supabase project's SQL editor (or via `supabase db push`) before
+  loading `/posts` — like `content_tasks`, this is a brand new table and
+  the migration creates it, enables RLS, and adds all four CRUD
+  policies.
+- **The "no duplicate post titles per content task" rule is enforced at
+  the application level** (`lib/supabase/post-actions.ts`), same as the
+  client/campaign/content-task title rules above, with a Postgres
+  unique-violation (23505) catch as a fallback — no database-level
+  unique constraint was added.
+- **Assumption to verify:** `status` on `posts` uses four suggested
+  values (`draft`, `scheduled`, `published`, `cancelled`, defaulting to
+  `draft`). `platform` reuses the same fixed dropdown of common values
+  as Content Tasks (defaulting to `instagram`). If you'd like different
+  allowed values for either of these, let me know and I'll adjust the
+  dropdowns/validation/migration check constraints to match.
+- To reach a content task's posts, go to `/content-tasks?campaign={id}`
+  and click the document ("View Posts") icon on that content task's row
+  — this takes you to `/posts?contentTask={id}`. Visiting `/posts`
+  directly with no `contentTask` in the URL shows a "Select a content
+  task" state that links back to `/content-tasks`.
+- **Build verification note:** this sandbox's `node_modules` ships only
+  a Windows `@next/swc` binary with no network access to fetch the
+  Linux one, so `next build` itself couldn't run here. `npm install`
+  (offline), `npm run lint`, and `npx tsc --noEmit` (full strict
+  type-check, same checks `next build` runs before compiling) were all
+  run and passed with zero errors. Please run `npm run build` once in
+  your own environment to confirm the production compile step too.
