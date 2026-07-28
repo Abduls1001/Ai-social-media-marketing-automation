@@ -185,15 +185,36 @@ Operations Platform.
         since that field is display-only text and `id` is now `number`.
       - `lib/supabase/clients.ts` — read-only `getClientsForAgency`,
         mirroring `agencies.ts`.
-      - `lib/supabase/client-actions.ts` — new `"use server"` module:
-        `createClientRecord`, `updateClientRecord`, `deleteClientRecord`.
-        Validates required `client_name`, email format (when provided),
-        trims whitespace, defaults `status` to `active`. Checks agency
-        ownership before every write and checks for a case-insensitive
-        duplicate client name (excluding the current client on edit)
-        before insert/update, with a Postgres unique-violation (23505)
-        catch as a fallback if a race condition slips past the
-        application-level check.
+      - `lib/supabase/client-actions.ts` — `"use server"` module exporting
+        **only** the three async Server Actions: `createClientRecord`,
+        `updateClientRecord`, `deleteClientRecord`. Validates required
+        `client_name`, email format (when provided), trims whitespace,
+        defaults `status` to `active`. Checks agency ownership before
+        every write and checks for a case-insensitive duplicate client
+        name (excluding the current client on edit) before insert/update,
+        with a Postgres unique-violation (23505) catch as a fallback if a
+        race condition slips past the application-level check.
+      - **Server Actions architecture fix:** this file originally also
+        exported `CLIENT_STATUSES` (a runtime const array), which
+        violates the Next.js rule that a `"use server"` file may only
+        export async functions (type-only exports like interfaces are
+        erased at compile time and are fine; a real value export is
+        not). Split out:
+        - `lib/supabase/client-types.ts` — `CLIENT_STATUSES`,
+          `ClientStatus`, `ClientFormValues`, `SaveClientResult`,
+          `DeleteClientResult`, `CleanedClientValues`.
+        - `lib/supabase/client-validation.ts` — `validateClientFormValues`
+          (form validation, previously an unexported `validate()` inside
+          `client-actions.ts`).
+        `client-actions.ts` now only exports the three Server Actions,
+        importing everything else from the two files above. Updated the
+        one consumer that imported a type from the old location
+        (`client-form-dialog.tsx`, now imports `ClientFormValues` from
+        `client-types.ts`). No functionality or UI changed — this was a
+        pure module-boundary fix. (The Agency module's
+        `agency-actions.ts` didn't need this split since it only ever
+        exported interfaces, which are erased and were never the
+        problem.)
       - `components/ui/badge.tsx`, `textarea.tsx`, `select.tsx`,
         `alert-dialog.tsx`, `table.tsx` — added shadcn primitives in the
         existing `new-york` style; `@radix-ui/react-select` and

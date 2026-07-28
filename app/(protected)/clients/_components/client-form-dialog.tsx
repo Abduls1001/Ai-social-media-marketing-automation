@@ -28,8 +28,8 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   createClientRecord,
   updateClientRecord,
-  type ClientFormValues,
 } from "@/lib/supabase/client-actions";
+import type { ClientFormValues } from "@/lib/supabase/client-types";
 import type { Client } from "@/types";
 
 interface ClientFormDialogProps {

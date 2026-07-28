@@ -4,7 +4,12 @@ import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
 import { AUTH_ROUTES } from "@/lib/constants";
-import type { Client } from "@/types";
+import { validateClientFormValues } from "@/lib/supabase/client-validation";
+import type {
+  ClientFormValues,
+  DeleteClientResult,
+  SaveClientResult,
+} from "@/lib/supabase/client-types";
 
 /**
  * Phase 3 — Client Management.
@@ -14,92 +19,12 @@ import type { Client } from "@/types";
  * from Server Components) — same split used for the Agency module in
  * lib/supabase/agency-actions.ts, and for the same reason: keeps the
  * server-only Supabase client out of any client-component bundle.
+ *
+ * IMPORTANT: a "use server" file may only export async functions.
+ * Types, interfaces, and constants live in `client-types.ts`, and
+ * validation lives in `client-validation.ts` — nothing else should be
+ * exported from this file besides the three Server Actions below.
  */
-
-export const CLIENT_STATUSES = ["active", "inactive", "lead"] as const;
-export type ClientStatus = (typeof CLIENT_STATUSES)[number];
-
-export interface ClientFormValues {
-  client_name: string;
-  company_name: string;
-  email: string;
-  phone: string;
-  website: string;
-  industry: string;
-  status: string;
-  notes: string;
-}
-
-export interface SaveClientResult {
-  client: Client | null;
-  error: string | null;
-}
-
-export interface DeleteClientResult {
-  success: boolean;
-  error: string | null;
-}
-
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-interface CleanedClientValues {
-  client_name: string;
-  company_name: string | null;
-  email: string | null;
-  phone: string | null;
-  website: string | null;
-  industry: string | null;
-  status: ClientStatus;
-  notes: string | null;
-}
-
-/**
- * Trims all form values and validates the required field (client_name)
- * plus email format when an email is provided. Everything else is
- * optional, matching the schema (only client_name and status are
- * NOT NULL on public.clients).
- */
-function validate(values: ClientFormValues): {
-  cleaned: CleanedClientValues | null;
-  error: string | null;
-} {
-  const clientName = values.client_name.trim();
-  const email = values.email.trim();
-
-  if (!clientName) {
-    return { cleaned: null, error: "Client name is required." };
-  }
-
-  if (email && !EMAIL_PATTERN.test(email)) {
-    return { cleaned: null, error: "Enter a valid email address." };
-  }
-
-  const status = values.status.trim().toLowerCase();
-  const safeStatus: ClientStatus = (
-    CLIENT_STATUSES as readonly string[]
-  ).includes(status)
-    ? (status as ClientStatus)
-    : "active";
-
-  const asNullable = (value: string) => {
-    const trimmed = value.trim();
-    return trimmed.length > 0 ? trimmed : null;
-  };
-
-  return {
-    cleaned: {
-      client_name: clientName,
-      company_name: asNullable(values.company_name),
-      email: email.length > 0 ? email : null,
-      phone: asNullable(values.phone),
-      website: asNullable(values.website),
-      industry: asNullable(values.industry),
-      status: safeStatus,
-      notes: asNullable(values.notes),
-    },
-    error: null,
-  };
-}
 
 async function requireAuthenticatedUserId(): Promise<string> {
   const supabase = await createClient();
@@ -185,7 +110,7 @@ export async function createClientRecord(
   agencyId: number,
   values: ClientFormValues
 ): Promise<SaveClientResult> {
-  const { cleaned, error: validationError } = validate(values);
+  const { cleaned, error: validationError } = validateClientFormValues(values);
 
   if (validationError || !cleaned) {
     return { client: null, error: validationError };
@@ -240,7 +165,7 @@ export async function updateClientRecord(
   agencyId: number,
   values: ClientFormValues
 ): Promise<SaveClientResult> {
-  const { cleaned, error: validationError } = validate(values);
+  const { cleaned, error: validationError } = validateClientFormValues(values);
 
   if (validationError || !cleaned) {
     return { client: null, error: validationError };
