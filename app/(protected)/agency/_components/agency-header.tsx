@@ -3,6 +3,8 @@ import { Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Agency } from "@/types";
 
+import { AgencyFormDialog } from "./agency-form-dialog";
+
 interface AgencyHeaderProps {
   agency: Agency;
 }
@@ -19,10 +21,15 @@ export function AgencyHeader({ agency }: AgencyHeaderProps) {
         </p>
       </div>
 
-      <Button type="button" className="self-start sm:self-auto">
-        <Pencil aria-hidden="true" />
-        Edit Agency
-      </Button>
+      <AgencyFormDialog
+        agency={agency}
+        trigger={
+          <Button type="button" className="self-start sm:self-auto">
+            <Pencil aria-hidden="true" />
+            Edit Agency
+          </Button>
+        }
+      />
     </div>
   );
 }

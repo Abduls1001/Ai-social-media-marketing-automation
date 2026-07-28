@@ -50,7 +50,7 @@ export default async function AgencyPage() {
 
       <WorkspaceInfoSection agency={agency} />
 
-      <QuickActionsSection />
+      <QuickActionsSection agency={agency} />
     </div>
   );
 }

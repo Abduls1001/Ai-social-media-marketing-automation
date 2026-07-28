@@ -48,7 +48,7 @@ function getStatusDotClassName(status: string) {
 
 export function WorkspaceInfoSection({ agency }: WorkspaceInfoSectionProps) {
   const fields: WorkspaceField[] = [
-    { label: "Workspace ID", value: agency.id, icon: Hash },
+    { label: "Workspace ID", value: String(agency.id), icon: Hash },
     {
       label: "Created Date",
       value: formatDate(agency.created_at),
