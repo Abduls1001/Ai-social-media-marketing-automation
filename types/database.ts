@@ -52,14 +52,39 @@ export type Client = {
 };
 
 /**
+ * Row shape for the `public.campaigns` table (Phase 4 — Campaign
+ * Management).
+ *
+ * `id` and `client_id` are both `int8` in the live database —
+ * `client_id` is a foreign key to `clients.id` (also `int8`), NOT a
+ * `uuid` — same pattern as `clients.agency_id` -> `agencies.id`.
+ *
+ * This is intentionally NOT a CRM: it exists to organize future
+ * automation (content tasks, posts) under a client's campaigns.
+ */
+export type Campaign = {
+  id: number;
+  client_id: number;
+  campaign_name: string;
+  objective: string | null;
+  platform: string | null;
+  status: string;
+  start_date: string | null;
+  end_date: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/**
  * Minimal Supabase Database type, hand-written to cover the tables this
  * app currently queries. Extend as new tables are introduced.
  *
  * Note: `Row`/`Insert`/`Update` are written as plain object types rather
- * than `Partial<Row> & {...}` intersections, and `Agency`/`Client` are
- * `type` aliases rather than `interface`s — both were found (via
- * isolated reproduction) to be required for the installed postgrest-js
- * version to correctly resolve `.insert()`/`.update()` payload types.
+ * than `Partial<Row> & {...}` intersections, and `Agency`/`Client`/
+ * `Campaign` are `type` aliases rather than `interface`s — both were
+ * found (via isolated reproduction) to be required for the installed
+ * postgrest-js version to correctly resolve `.insert()`/`.update()`
+ * payload types.
  */
 export interface Database {
   __InternalSupabase: {
@@ -136,6 +161,34 @@ export interface Database {
           industry?: string | null;
           status?: string;
           notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      campaigns: {
+        Row: Campaign;
+        Insert: {
+          id?: number;
+          client_id: number;
+          campaign_name: string;
+          objective?: string | null;
+          platform?: string | null;
+          status?: string;
+          start_date?: string | null;
+          end_date?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: number;
+          client_id?: number;
+          campaign_name?: string;
+          objective?: string | null;
+          platform?: string | null;
+          status?: string;
+          start_date?: string | null;
+          end_date?: string | null;
           created_at?: string;
           updated_at?: string;
         };

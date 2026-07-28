@@ -1,8 +1,7 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
-import { Megaphone, Pencil, Search, Trash2 } from "lucide-react";
+import { Pencil, Search, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,50 +13,54 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { Client } from "@/types";
+import type { Campaign, Client } from "@/types";
 
-import { ClientFormDialog } from "./client-form-dialog";
-import { ClientStatusBadge } from "./client-status-badge";
-import { ClientsEmptyState } from "./clients-empty-state";
-import { DeleteClientDialog } from "./delete-client-dialog";
+import { CampaignFormDialog } from "./campaign-form-dialog";
+import { CampaignStatusBadge } from "./campaign-status-badge";
+import { CampaignsEmptyState } from "./campaigns-empty-state";
+import { DeleteCampaignDialog } from "./delete-campaign-dialog";
 
-interface ClientsListProps {
-  agencyId: number;
-  clients: Client[];
+interface CampaignsListProps {
+  clientId: number;
+  client: Client;
+  campaigns: Campaign[];
 }
 
-export function ClientsList({ agencyId, clients }: ClientsListProps) {
+export function CampaignsList({
+  clientId,
+  client,
+  campaigns,
+}: CampaignsListProps) {
   const [search, setSearch] = React.useState("");
 
-  if (clients.length === 0) {
-    return <ClientsEmptyState agencyId={agencyId} />;
+  if (campaigns.length === 0) {
+    return <CampaignsEmptyState clientId={clientId} />;
   }
 
   const query = search.trim().toLowerCase();
-  const filteredClients = query
-    ? clients.filter((client) => {
-        const haystack = `${client.client_name} ${client.company_name ?? ""}`.toLowerCase();
-        return haystack.includes(query);
-      })
-    : clients;
+  const filteredCampaigns = query
+    ? campaigns.filter((campaign) =>
+        campaign.campaign_name.toLowerCase().includes(query)
+      )
+    : campaigns;
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-6 lg:p-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-            Clients
+            Campaigns
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {clients.length} {clients.length === 1 ? "client" : "clients"} in
-            this workspace.
+            {campaigns.length} {campaigns.length === 1 ? "campaign" : "campaigns"}{" "}
+            for {client.client_name}.
           </p>
         </div>
 
-        <ClientFormDialog
-          agencyId={agencyId}
-          client={null}
-          trigger={<Button type="button">Add Client</Button>}
+        <CampaignFormDialog
+          clientId={clientId}
+          campaign={null}
+          trigger={<Button type="button">Add Campaign</Button>}
         />
       </div>
 
@@ -68,85 +71,74 @@ export function ClientsList({ agencyId, clients }: ClientsListProps) {
         />
         <Input
           type="search"
-          placeholder="Search clients..."
+          placeholder="Search campaigns..."
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           className="pl-9"
-          aria-label="Search clients"
+          aria-label="Search campaigns"
         />
       </div>
 
-      {filteredClients.length === 0 ? (
+      {filteredCampaigns.length === 0 ? (
         <p className="py-12 text-center text-sm text-muted-foreground">
-          No clients match &ldquo;{search}&rdquo;.
+          No campaigns match &ldquo;{search}&rdquo;.
         </p>
       ) : (
         <div className="rounded-md border">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Client</TableHead>
-                <TableHead className="hidden md:table-cell">Company</TableHead>
-                <TableHead className="hidden lg:table-cell">Email</TableHead>
-                <TableHead className="hidden lg:table-cell">Industry</TableHead>
+                <TableHead>Campaign</TableHead>
+                <TableHead className="hidden md:table-cell">Platform</TableHead>
+                <TableHead className="hidden lg:table-cell">Start</TableHead>
+                <TableHead className="hidden lg:table-cell">End</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredClients.map((client) => (
-                <TableRow key={client.id}>
+              {filteredCampaigns.map((campaign) => (
+                <TableRow key={campaign.id}>
                   <TableCell className="font-medium">
-                    {client.client_name}
+                    {campaign.campaign_name}
                   </TableCell>
                   <TableCell className="hidden text-muted-foreground md:table-cell">
-                    {client.company_name ?? "—"}
+                    {campaign.platform ?? "—"}
                   </TableCell>
                   <TableCell className="hidden text-muted-foreground lg:table-cell">
-                    {client.email ?? "—"}
+                    {campaign.start_date ?? "—"}
                   </TableCell>
                   <TableCell className="hidden text-muted-foreground lg:table-cell">
-                    {client.industry ?? "—"}
+                    {campaign.end_date ?? "—"}
                   </TableCell>
                   <TableCell>
-                    <ClientStatusBadge status={client.status} />
+                    <CampaignStatusBadge status={campaign.status} />
                   </TableCell>
                   <TableCell>
                     <div className="flex justify-end gap-1">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        aria-label={`View campaigns for ${client.client_name}`}
-                        asChild
-                      >
-                        <Link href={`/campaigns?client=${client.id}`}>
-                          <Megaphone className="size-4" />
-                        </Link>
-                      </Button>
-                      <ClientFormDialog
-                        agencyId={agencyId}
-                        client={client}
+                      <CampaignFormDialog
+                        clientId={clientId}
+                        campaign={campaign}
                         trigger={
                           <Button
                             type="button"
                             variant="ghost"
                             size="icon"
-                            aria-label={`Edit ${client.client_name}`}
+                            aria-label={`Edit ${campaign.campaign_name}`}
                           >
                             <Pencil className="size-4" />
                           </Button>
                         }
                       />
-                      <DeleteClientDialog
-                        agencyId={agencyId}
-                        client={client}
+                      <DeleteCampaignDialog
+                        clientId={clientId}
+                        campaign={campaign}
                         trigger={
                           <Button
                             type="button"
                             variant="ghost"
                             size="icon"
-                            aria-label={`Delete ${client.client_name}`}
+                            aria-label={`Delete ${campaign.campaign_name}`}
                             className="text-destructive hover:text-destructive"
                           >
                             <Trash2 className="size-4" />

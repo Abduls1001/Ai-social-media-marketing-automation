@@ -234,10 +234,85 @@ Operations Platform.
       - `agency_id` is always taken from the current user's agency and
         never exposed as a user-selectable field, per the "one agency →
         many clients" rule.
+- [x] **Part 4 — Campaign Management (Phase 4)**
+      Full campaign CRUD (create, edit, delete) scoped to a specific
+      client, following the Client module's architecture exactly. Uses
+      the existing `campaigns` table exactly as specified — no new
+      tables, no migrations generated (per explicit instruction, same as
+      the `clients` table in Part 3.1). Not a CRM: exists to organize
+      future automation (content tasks, posts) under a client's
+      campaigns.
+      - **Schema**: `campaigns.id` and `campaigns.client_id` are both
+        `int8`, `client_id` a foreign key to `clients.id` (also `int8`)
+        — same pattern as `clients.agency_id` → `agencies.id`.
+      - **Navigation decision**: unlike Agency (one per user) and
+        Clients (all shown on one page), an agency can have many
+        clients, and each client has its own campaigns — so there's no
+        single implicit "the client" the way there's a single implicit
+        "the agency". Resolved by adding a "View Campaigns" icon button
+        to each row on `/clients`, linking to `/campaigns?client={id}`.
+        The Campaigns page reads `?client=` from the URL, verifies that
+        client belongs to the current user's agency, and shows that
+        client's campaigns. No client-switcher dropdown or extra
+        navigation UI was added beyond this, per the "don't add
+        unrequested features" instruction.
+      - `types/database.ts` — added `Campaign` type (`type` alias, not
+        `interface` — same reason as `Agency`/`Client`) and the
+        `campaigns` table entry to `Database`, `id`/`client_id` typed as
+        `number` (`int8`), following the exact `Client`/`clients`
+        pattern.
+      - `lib/supabase/campaigns.ts` — read-only `getCampaignsForClient`,
+        mirroring `getClientsForAgency`.
+      - `lib/supabase/clients.ts` — added `getClientById` (new, small
+        addition needed so the Campaigns page can resolve the client
+        named in `?client=`; everything else in this file is untouched).
+      - `lib/supabase/campaign-types.ts` — `CAMPAIGN_STATUSES`
+        (`planning`/`active`/`paused`/`completed` — see assumption note
+        below), `CampaignStatus`, `CampaignFormValues`,
+        `SaveCampaignResult`, `DeleteCampaignResult`,
+        `CleanedCampaignValues`. Mirrors `client-types.ts`.
+      - `lib/supabase/campaign-validation.ts` — `validateCampaignFormValues`
+        (required `campaign_name`, trims whitespace, defaults `status`
+        to `planning`). Mirrors `client-validation.ts`. No email field on
+        this table, so no email-format check is needed here.
+      - `lib/supabase/campaign-actions.ts` — `"use server"` module
+        exporting **only** the three async Server Actions:
+        `createCampaignRecord`, `updateCampaignRecord`,
+        `deleteCampaignRecord` (mirrors the Client module's
+        `client-actions.ts`, including the same "only async functions"
+        module-boundary discipline). Checks client ownership (that the
+        client belongs to an agency owned by the current user) via two
+        plain queries rather than a PostgREST embedded/joined select, so
+        it doesn't depend on a foreign key relationship being registered
+        in PostgREST's schema cache. Checks for a case-insensitive
+        duplicate campaign name within the same client (excluding the
+        current campaign on edit) before insert/update, with a Postgres
+        unique-violation (23505) catch as a fallback.
+      - `app/(protected)/clients/_components/clients-list.tsx` — added
+        the "View Campaigns" icon button described above; no other
+        change to this file.
+      - `app/(protected)/campaigns/_components/` —
+        `campaign-form-dialog.tsx` (Add/Edit: campaign_name, objective,
+        platform, status, start_date, end_date),
+        `delete-campaign-dialog.tsx`, `campaign-status-badge.tsx`,
+        `campaigns-list.tsx` (table, search-by-name, row actions),
+        `campaigns-empty-state.tsx`, `campaigns-error-state.tsx`,
+        `campaigns-needs-client-state.tsx` (shown when `?client=` is
+        missing, invalid, or doesn't belong to the user's agency —
+        directs to `/clients`).
+      - `app/(protected)/campaigns/page.tsx` — replaced the
+        `PlaceholderPage` with the real Server Component: resolves the
+        client from `?client=`, verifies ownership, fetches that
+        client's campaigns, and renders the appropriate state
+        (needs-client / error / empty / populated list).
+      - `client_id` is always taken from the resolved client (via the
+        URL) and never exposed as a user-enterable field, per the "one
+        client → many campaigns" rule and "never ask users to manually
+        enter IDs."
 
 ## Next
 
-- [ ] **Phase 3.2 / Part 4 — TBD** (not yet scoped)
+- [ ] **Phase 5 / Content Tasks — TBD** (not yet scoped)
 
 ## Notes
 
@@ -277,3 +352,23 @@ Operations Platform.
   `active`. If your actual `status` column is a Postgres enum with
   different allowed values, let me know and I'll adjust the
   dropdown/validation to match.
+- **No migration exists for `campaigns` either**, same reasoning as
+  `clients` above — the table already exists live and this codebase
+  does not generate migrations against it. Please verify RLS is
+  configured on `campaigns` for select/insert/update/delete, scoped
+  through the client's owning agency, or writes will fail with a raw
+  Postgres permission error.
+- **The "no duplicate campaign names per client" rule is enforced at
+  the application level only** (`lib/supabase/campaign-actions.ts`),
+  same caveat as the client-name rule above — no database constraint
+  was added since no migration was written.
+- **Assumption to verify against your live schema:** `status` on
+  `campaigns` is treated as free text with four suggested values
+  (`planning`, `active`, `paused`, `completed`) shown in a dropdown,
+  defaulting to `planning`. If your actual `status` column has
+  different allowed values, let me know and I'll adjust to match.
+- To reach a client's campaigns, go to `/clients` and click the
+  megaphone ("View Campaigns") icon on that client's row — this takes
+  you to `/campaigns?client={id}`. Visiting `/campaigns` directly (e.g.
+  via the sidebar) with no `client` in the URL shows a "Select a
+  client" state that links back to `/clients`.

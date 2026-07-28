@@ -4,4 +4,4 @@
  * Cross-cutting types and interfaces used across the app.
  */
 
-export type { Agency, Client, Database } from "./database";
+export type { Agency, Campaign, Client, Database } from "./database";

@@ -1,6 +1,46 @@
 import { createClient } from "@/lib/supabase/server";
 import type { Client } from "@/types";
 
+export interface GetClientByIdResult {
+  client: Client | null;
+  error: string | null;
+}
+
+/**
+ * Fetches a single client by id. Used by the Campaigns page to resolve
+ * which client's campaigns to show from the `?client=` query param.
+ *
+ * Returns `{ client: null, error: null }` when no client matches the id
+ * (not treated as an error — the caller decides how to handle "not
+ * found", e.g. showing a "select a client" state).
+ */
+export async function getClientById(
+  clientId: number
+): Promise<GetClientByIdResult> {
+  try {
+    const supabase = await createClient();
+
+    const { data, error } = await supabase
+      .from("clients")
+      .select("*")
+      .eq("id", clientId)
+      .maybeSingle();
+
+    if (error) {
+      return { client: null, error: error.message };
+    }
+
+    return { client: data ?? null, error: null };
+  } catch (caughtError) {
+    const message =
+      caughtError instanceof Error
+        ? caughtError.message
+        : "Unknown error while fetching the client.";
+
+    return { client: null, error: message };
+  }
+}
+
 export interface GetClientsForAgencyResult {
   clients: Client[];
   error: string | null;
