@@ -1,3 +1,7 @@
+import Link from "next/link";
+
+import { createClient } from "@/lib/supabase/server";
+import { AUTH_ROUTES, PROTECTED_PATHS } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -7,7 +11,22 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-export default function Home() {
+// This page checks the current user's session on every request to decide
+// where "Get Started" should go, so it must never be statically cached or
+// prerendered at build time.
+export const dynamic = "force-dynamic";
+
+export default async function Home() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // Authenticated visitors go straight to the dashboard; everyone else is
+  // sent to login first (they're redirected back to the dashboard after
+  // signing in via LoginForm's redirectTo handling).
+  const getStartedHref = user ? PROTECTED_PATHS[0] : AUTH_ROUTES.login;
+
   return (
     <main className="flex flex-1 flex-col items-center justify-center px-6 text-center">
       <Card className="w-full max-w-md">
@@ -20,7 +39,9 @@ export default function Home() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Button>Get Started</Button>
+          <Button asChild>
+            <Link href={getStartedHref}>Get Started</Link>
+          </Button>
         </CardContent>
       </Card>
     </main>

@@ -76,6 +76,32 @@ export type Campaign = {
 };
 
 /**
+ * Row shape for the `public.content_tasks` table (Phase 5 — Content
+ * Task Management).
+ *
+ * `id` and `campaign_id` are both `int8` in the live database —
+ * `campaign_id` is a foreign key to `campaigns.id` (also `int8`), NOT a
+ * `uuid` — same pattern as `campaigns.client_id` -> `clients.id`.
+ *
+ * A Content Task is not a note: it's the structured input future AI
+ * automation will use to generate captions, images, and posts. Kept to
+ * automation-essential fields only.
+ */
+export type ContentTask = {
+  id: number;
+  campaign_id: number;
+  title: string;
+  description: string | null;
+  platform: string;
+  content_type: string;
+  priority: string;
+  status: string;
+  due_date: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+/**
  * Minimal Supabase Database type, hand-written to cover the tables this
  * app currently queries. Extend as new tables are introduced.
  *
@@ -189,6 +215,36 @@ export interface Database {
           status?: string;
           start_date?: string | null;
           end_date?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      content_tasks: {
+        Row: ContentTask;
+        Insert: {
+          id?: number;
+          campaign_id: number;
+          title: string;
+          description?: string | null;
+          platform?: string;
+          content_type?: string;
+          priority?: string;
+          status?: string;
+          due_date?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: number;
+          campaign_id?: number;
+          title?: string;
+          description?: string | null;
+          platform?: string;
+          content_type?: string;
+          priority?: string;
+          status?: string;
+          due_date?: string | null;
           created_at?: string;
           updated_at?: string;
         };

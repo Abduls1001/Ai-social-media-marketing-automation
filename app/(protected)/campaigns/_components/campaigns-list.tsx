@@ -1,7 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { Pencil, Search, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { ListChecks, Pencil, Search, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -116,6 +117,17 @@ export function CampaignsList({
                   </TableCell>
                   <TableCell>
                     <div className="flex justify-end gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`View content tasks for ${campaign.campaign_name}`}
+                        asChild
+                      >
+                        <Link href={`/content-tasks?campaign=${campaign.id}`}>
+                          <ListChecks className="size-4" />
+                        </Link>
+                      </Button>
                       <CampaignFormDialog
                         clientId={clientId}
                         campaign={campaign}

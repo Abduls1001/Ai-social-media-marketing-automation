@@ -310,9 +310,113 @@ Operations Platform.
         client → many campaigns" rule and "never ask users to manually
         enter IDs."
 
+- [x] **Phase 5 — Content Task Management**
+      Full content task CRUD (create, edit, delete) scoped to a specific
+      campaign, following the Campaign module's architecture exactly. A
+      Content Task is not a note — it's the structured input future AI
+      automation will use to generate captions, images, and posts. Kept
+      to automation-essential fields only, per instruction: nothing on
+      scheduling, publishing, analytics, approval workflow, or file
+      uploads.
+      - **Schema**: new table, `content_tasks.id` and `.campaign_id` are
+        both `int8`, `campaign_id` a foreign key to `campaigns.id` (also
+        `int8`) — same pattern as `campaigns.client_id` → `clients.id`.
+        Unlike `clients`/`campaigns` (which already existed live and
+        intentionally had no migration), `content_tasks` is a brand new
+        table, so
+        `supabase/migrations/0003_create_content_tasks_table.sql` creates
+        it with RLS enabled and all four CRUD policies (select / insert /
+        update / delete) from the start, scoped through
+        `content_tasks.campaign_id` → `campaigns.client_id` →
+        `clients.agency_id` → `agencies.user_id = auth.uid()`.
+      - **Navigation decision**: same reasoning as Campaigns — a client
+        can have many campaigns, and each campaign has its own content
+        tasks, so there's no single implicit "the campaign". Resolved by
+        adding a "View Content Tasks" icon button to each row on
+        `/campaigns`, linking to `/content-tasks?campaign={id}`. The
+        Content Tasks page reads `?campaign=` from the URL, verifies that
+        campaign's client belongs to the current user's agency (one hop
+        further than Campaigns' own check), and shows that campaign's
+        content tasks. No campaign-switcher dropdown or extra navigation
+        UI was added, per the "don't add unrequested features"
+        instruction.
+      - `types/database.ts` — added `ContentTask` type (`type` alias, not
+        `interface` — same reason as `Agency`/`Client`/`Campaign`) and
+        the `content_tasks` table entry to `Database`, `id`/`campaign_id`
+        typed as `number` (`int8`), following the exact `Campaign`
+        pattern.
+      - `lib/supabase/content-tasks.ts` — read-only
+        `getContentTasksForCampaign`, mirroring `getCampaignsForClient`.
+      - `lib/supabase/campaigns.ts` — added `getCampaignById` (new, small
+        addition needed so the Content Tasks page can resolve the
+        campaign named in `?campaign=`; everything else in this file is
+        untouched — same precedent as `getClientById` added to
+        `clients.ts` in Phase 4).
+      - `lib/supabase/content-task-types.ts` — `CONTENT_TASK_STATUSES`
+        (`todo`/`in_progress`/`in_review`/`done`), `CONTENT_TASK_PRIORITIES`
+        (`low`/`medium`/`high`/`urgent`), `CONTENT_TASK_PLATFORMS`,
+        `CONTENT_TASK_TYPES`, plus `ContentTaskFormValues`,
+        `SaveContentTaskResult`, `DeleteContentTaskResult`,
+        `CleanedContentTaskValues`. Mirrors `campaign-types.ts`.
+      - `lib/supabase/content-task-validation.ts` —
+        `validateContentTaskFormValues` (required `title`, trims
+        whitespace, defaults each enum field to a safe value when the
+        submitted value isn't recognized). Mirrors
+        `campaign-validation.ts`.
+      - `lib/supabase/content-task-actions.ts` — `"use server"` module
+        exporting **only** the three async Server Actions:
+        `createContentTaskRecord`, `updateContentTaskRecord`,
+        `deleteContentTaskRecord` (mirrors the Campaign module's
+        `campaign-actions.ts`, including the same "only async functions"
+        module-boundary discipline). Ownership is checked via
+        `assertCampaignOwnership`, three plain queries
+        (campaign → client → agency) rather than a PostgREST
+        embedded/joined select, extending `assertClientOwnership`'s
+        two-query pattern one hop further for the extra level in this
+        module's ownership chain. Checks for a case-insensitive duplicate
+        title within the same campaign (excluding the current task on
+        edit) before insert/update, with a Postgres unique-violation
+        (23505) catch as a fallback.
+      - `app/(protected)/campaigns/_components/campaigns-list.tsx` —
+        added the "View Content Tasks" icon button described above; no
+        other change to this file.
+      - `app/(protected)/content-tasks/_components/` —
+        `content-task-form-dialog.tsx` (Add/Edit: title, description,
+        platform, content_type, priority, status, due_date),
+        `delete-content-task-dialog.tsx`, `content-task-status-badge.tsx`,
+        `content-task-priority-badge.tsx`, `content-tasks-list.tsx`
+        (table, search-by-title, status filter, priority filter, row
+        actions), `content-tasks-empty-state.tsx`,
+        `content-tasks-error-state.tsx`,
+        `content-tasks-needs-campaign-state.tsx` (shown when `?campaign=`
+        is missing, invalid, or doesn't belong to the user's agency —
+        directs to `/campaigns`).
+      - `app/(protected)/content-tasks/page.tsx` — replaced the
+        `PlaceholderPage` with the real Server Component: resolves the
+        campaign from `?campaign=`, verifies ownership through its
+        client's agency, fetches that campaign's content tasks, and
+        renders the appropriate state (needs-campaign / error / empty /
+        populated list).
+      - `campaign_id` is always taken from the resolved campaign (via the
+        URL) and never exposed as a user-enterable field, per the "one
+        campaign → many content tasks" rule and "never ask users to
+        manually enter IDs."
+
+- [x] **Landing Page Navigation Fix**
+      `app/(public)/page.tsx`'s "Get Started" button was a plain
+      `<Button>` with no `href` — it did nothing, so unauthenticated
+      visitors had to manually type `/login`. Fixed by checking the
+      current user server-side (same `supabase.auth.getUser()` pattern
+      used on every protected page) and wrapping the existing button in
+      a `Link`: authenticated visitors go straight to `/home`
+      (`PROTECTED_PATHS[0]`), unauthenticated visitors go to `/login`
+      (`AUTH_ROUTES.login`) and land back on `/home` after signing in,
+      via `LoginForm`'s existing `redirectTo` handling. No UI or design
+      change — navigation only.
+
 ## Next
 
-- [ ] **Phase 5 / Content Tasks — TBD** (not yet scoped)
+- [ ] **Phase 6 — TBD** (not yet scoped)
 
 ## Notes
 
@@ -372,3 +476,26 @@ Operations Platform.
   you to `/campaigns?client={id}`. Visiting `/campaigns` directly (e.g.
   via the sidebar) with no `client` in the URL shows a "Select a
   client" state that links back to `/clients`.
+- **Run `supabase/migrations/0003_create_content_tasks_table.sql`** in
+  your Supabase project's SQL editor (or via `supabase db push`) before
+  loading `/content-tasks` — unlike `clients`/`campaigns`, this is a
+  brand new table and the migration creates it, enables RLS, and adds
+  all four CRUD policies.
+- **The "no duplicate content task titles per campaign" rule is
+  enforced at the application level** (`lib/supabase/content-task-actions.ts`),
+  same as the client/campaign name rules above, with a Postgres
+  unique-violation (23505) catch as a fallback — no database-level
+  unique constraint was added.
+- **Assumption to verify:** `status` on `content_tasks` uses four
+  suggested values (`todo`, `in_progress`, `in_review`, `done`,
+  defaulting to `todo`), and `priority` uses four suggested values
+  (`low`, `medium`, `high`, `urgent`, defaulting to `medium`). `platform`
+  and `content_type` are each a fixed dropdown of common values
+  (defaulting to `instagram` / `post`). If you'd like different allowed
+  values for any of these, let me know and I'll adjust the
+  dropdowns/validation/migration check constraints to match.
+- To reach a campaign's content tasks, go to `/campaigns?client={id}`
+  and click the checklist ("View Content Tasks") icon on that
+  campaign's row — this takes you to `/content-tasks?campaign={id}`.
+  Visiting `/content-tasks` directly with no `campaign` in the URL shows
+  a "Select a campaign" state that links back to `/campaigns`.
