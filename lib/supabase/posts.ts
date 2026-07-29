@@ -1,6 +1,49 @@
 import { createClient } from "@/lib/supabase/server";
 import type { Post } from "@/types";
 
+export interface GetPostByIdResult {
+  post: Post | null;
+  error: string | null;
+}
+
+/**
+ * Fetches a single post by id. Used by the AI caption Server Action
+ * (`lib/supabase/post-ai-actions.ts`) to load the post it's generating
+ * a caption for — same precedent as `getContentTaskById`,
+ * `getCampaignById`, and `getClientById` added for the pages above this
+ * one in the hierarchy.
+ *
+ * Returns `{ post: null, error: null }` when no post matches the id
+ * (not treated as an error — the caller decides how to handle "not
+ * found").
+ */
+export async function getPostById(
+  postId: number
+): Promise<GetPostByIdResult> {
+  try {
+    const supabase = await createClient();
+
+    const { data, error } = await supabase
+      .from("posts")
+      .select("*")
+      .eq("id", postId)
+      .maybeSingle();
+
+    if (error) {
+      return { post: null, error: error.message };
+    }
+
+    return { post: data ?? null, error: null };
+  } catch (caughtError) {
+    const message =
+      caughtError instanceof Error
+        ? caughtError.message
+        : "Unknown error while fetching the post.";
+
+    return { post: null, error: message };
+  }
+}
+
 export interface GetPostsForContentTaskResult {
   posts: Post[];
   error: string | null;

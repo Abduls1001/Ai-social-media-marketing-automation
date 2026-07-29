@@ -499,9 +499,112 @@ Operations Platform.
         the "one content task → many posts" rule and "never ask users to
         manually enter IDs."
 
+- [x] **Phase 7 — AI Content Generation**
+      Added an AI-generated caption for Posts, integrated into the
+      existing Post edit dialog. Not a new module — no new table, no
+      new page, no publishing/scheduling/analytics/automation.
+      - **AI service (`lib/ai/`)** — reusable, called by exactly one
+        Server Action, so there's no duplicated OpenAI call anywhere:
+        - `openai-client.ts` — single lazily-created OpenAI client
+          (`getOpenAIClient()`), same lazy pattern as
+          `lib/supabase/server.ts` / `client.ts`. Throws
+          `MissingOpenAIKeyError` if `OPENAI_API_KEY` isn't set, caught
+          by the service layer and turned into a friendly error
+          instead of a crash. Model is `OPENAI_CAPTION_MODEL`,
+          overridable via `OPENAI_MODEL`, defaulting to `gpt-4o-mini`.
+        - `caption-prompts.ts` — `buildCaptionPrompt()`, a pure
+          function (no Supabase, no "use server") with tone/format
+          guidance for Instagram, Facebook, LinkedIn, and X, and a
+          context builder that folds in Post title, platform, Content
+          Task title/description/type/priority, Campaign
+          name/objective, and Client name/industry — whichever of
+          those are available.
+        - `caption-service.ts` — `generateCaptionWithAI()`, the only
+          function in the app that calls the OpenAI Chat Completions
+          API. Both the "Generate" and "Regenerate" actions go through
+          this one function.
+      - `lib/supabase/post-ai-actions.ts` — new `"use server"` module
+        exporting **one** Server Action, `generateAiCaptionForPost`,
+        following the same "only async functions" module-boundary
+        discipline as every other `*-actions.ts` file. No duplicated
+        logic:
+        - Ownership check reuses `assertContentTaskOwnership` (now
+          exported from `post-actions.ts` — the only change to that
+          file, besides an updated file-header comment) instead of
+          re-implementing it.
+        - Related data is assembled from the existing read-only
+          lookups: the new `getPostById` (added to `lib/supabase/posts.ts`,
+          mirroring `getContentTaskById` / `getCampaignById` /
+          `getClientById`), plus the three that already existed.
+        - Calls `generateCaptionWithAI`, then writes the result
+          straight to the existing `posts.caption` column via a normal
+          Supabase `update`, scoped by both `id` and `content_task_id`
+          — same defense-in-depth pattern as `updatePostRecord`.
+      - `app/(protected)/posts/_components/post-form-dialog.tsx` — the
+        only UI change. Added a small outline button next to the
+        Caption label, inside the existing edit dialog (no redesign,
+        no new page): "Generate AI Caption" when the caption field is
+        empty, "Regenerate Caption" once it has content. Disabled while
+        generating or while the form is saving; shows a spinner via the
+        same `Loader2` pattern used by the Save/Delete buttons. On
+        success, fills the Caption textarea with the result and shows a
+        success toast (`sonner`, matching every other action in the
+        app); on failure, shows an error toast and leaves the field
+        untouched. The dialog stays open either way — generating a
+        caption is a distinct action from saving the form. Only shown
+        in edit mode: caption generation writes directly to an existing
+        post row, so a post must already exist (this also means it
+        isn't available in "Add Post" / create mode — a deliberate,
+        minimal scope decision, not an oversight).
+      - `package.json` — added `openai` (`^7.1.0`) as a dependency, the
+        official OpenAI SDK. No other dependency changes.
+      - `.env.example` — documented the two new server-only environment
+        variables, `OPENAI_API_KEY` (required) and `OPENAI_MODEL`
+        (optional).
+      - No database changes: no new table, no new column, no RLS
+        change, no migration. Uses the existing `posts.caption` column
+        exactly as Phase 6 defined it.
+
+- [x] **Phase 7.1 — AI Provider Swap (OpenAI → Google Gemini)**
+      Swapped the AI provider only. No new features, no UI change, no
+      change to the Generate/Regenerate workflow, loading states, error
+      handling, or toast notifications — `caption-service.ts` still
+      exports the same `generateCaptionWithAI(context)` function with
+      the same `GenerateCaptionResult` shape, so nothing outside
+      `lib/ai/` needed to change.
+      - `lib/ai/openai-client.ts` → replaced with
+        `lib/ai/gemini-client.ts`: same lazy-singleton-client pattern,
+        now wrapping `@google/genai`'s `GoogleGenAI`. Reads
+        `GEMINI_API_KEY` (was `OPENAI_API_KEY`) and throws
+        `MissingGeminiKeyError` (was `MissingOpenAIKeyError`) when
+        unset. Model comes from `GEMINI_CAPTION_MODEL`, overridable via
+        `GEMINI_MODEL` (was `OPENAI_MODEL`), defaulting to
+        `gemini-2.5-flash` (was `gpt-4o-mini`).
+      - `lib/ai/caption-service.ts` — internals updated to call
+        `client.models.generateContent()` (Gemini) instead of
+        `client.chat.completions.create()` (OpenAI); the prompt itself
+        (`buildCaptionPrompt`, unchanged in `caption-prompts.ts`) is
+        passed as `contents` + `config.systemInstruction` instead of
+        `system`/`user` chat messages. Exported function name, params,
+        and return type are unchanged.
+      - `lib/supabase/post-ai-actions.ts` — no functional change; only
+        a stale comment referencing "OpenAI" was corrected to "Gemini".
+        `generateAiCaptionForPost` still has the same name and
+        signature.
+      - `package.json` — removed `openai`, added `@google/genai`
+        (`^2.13.0`), Google's official Gemini SDK.
+      - `.env.example` — `OPENAI_API_KEY` / `OPENAI_MODEL` replaced
+        with `GEMINI_API_KEY` (required) / `GEMINI_MODEL` (optional).
+      - Everything else from Phase 7 — the button placement/labels in
+        `post-form-dialog.tsx`, the ownership check, the Supabase
+        update to `posts.caption`, the prompt templates per platform —
+        is untouched.
+
 ## Next
 
-- [ ] **Phase 7 — TBD** (not yet scoped)
+- [ ] **Phase 8 — TBD** (not yet scoped; per instruction, Publishing,
+      Analytics, and Automation are explicitly out of scope until
+      separately requested)
 
 ## Notes
 
@@ -612,3 +715,16 @@ Operations Platform.
   type-check, same checks `next build` runs before compiling) were all
   run and passed with zero errors. Please run `npm run build` once in
   your own environment to confirm the production compile step too.
+- **Set `GEMINI_API_KEY`** in `.env.local` before using "Generate AI
+  Caption" / "Regenerate Caption" on `/posts` — without it, clicking
+  the button shows a clear error toast ("AI caption generation isn't
+  configured yet...") instead of a crash; nothing else in the app is
+  affected. `GEMINI_MODEL` is optional and defaults to
+  `gemini-2.5-flash`. Phase 7 required no migration and no RLS change —
+  it only ever writes to the `caption` column that Phase 6's
+  `0004_create_posts_table.sql` already created.
+- **Phase 7 build verification:** unlike prior phases, this sandbox had
+  network access to the npm registry, so `npm install`, `npx tsc
+  --noEmit`, `npm run lint`, and `npm run build` were all run for real
+  (against placeholder Supabase env values) and all passed with zero
+  errors/warnings.

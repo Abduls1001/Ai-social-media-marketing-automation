@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { createPostRecord, updatePostRecord } from "@/lib/supabase/post-actions";
+import { generateAiCaptionForPost } from "@/lib/supabase/post-ai-actions";
 import type { PostFormValues } from "@/lib/supabase/post-types";
 import type { Post } from "@/types";
 
@@ -91,6 +92,7 @@ export function PostFormDialog({
   );
   const [isSaving, setIsSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [isGeneratingCaption, setIsGeneratingCaption] = React.useState(false);
 
   // Reset the form to the latest post data each time the dialog opens,
   // so a previous unsaved edit (or a stale create-mode draft) never
@@ -152,6 +154,38 @@ export function PostFormDialog({
     }
   }
 
+  // AI caption generation writes straight to the saved post's caption
+  // column (Server Action does its own Supabase update), so this is
+  // only available in edit mode — a post must already exist to save a
+  // caption onto it.
+  async function handleGenerateCaption() {
+    if (!post) {
+      return;
+    }
+
+    setError(null);
+    setIsGeneratingCaption(true);
+
+    try {
+      const result = await generateAiCaptionForPost(post.id, contentTaskId);
+
+      if (result.error || !result.post) {
+        const message =
+          result.error ?? "Something went wrong. Please try again.";
+        toast.error(message);
+        return;
+      }
+
+      setValues((prev) => ({ ...prev, caption: result.post!.caption ?? "" }));
+      toast.success("Caption generated.");
+      router.refresh();
+    } catch {
+      toast.error("Something went wrong. Please try again.");
+    } finally {
+      setIsGeneratingCaption(false);
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
@@ -181,12 +215,34 @@ export function PostFormDialog({
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="caption">Caption</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="caption">Caption</Label>
+                {isEditMode && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleGenerateCaption}
+                    disabled={isSaving || isGeneratingCaption}
+                  >
+                    {isGeneratingCaption ? (
+                      <Loader2 className="animate-spin" />
+                    ) : (
+                      <Sparkles />
+                    )}
+                    {isGeneratingCaption
+                      ? "Generating..."
+                      : values.caption.trim()
+                        ? "Regenerate Caption"
+                        : "Generate AI Caption"}
+                  </Button>
+                )}
+              </div>
               <Textarea
                 id="caption"
                 value={values.caption}
                 onChange={handleChange("caption")}
-                disabled={isSaving}
+                disabled={isSaving || isGeneratingCaption}
                 rows={3}
               />
             </div>

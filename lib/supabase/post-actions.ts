@@ -24,7 +24,13 @@ import type {
  * IMPORTANT: a "use server" file may only export async functions.
  * Types, interfaces, and constants live in `post-types.ts`, and
  * validation lives in `post-validation.ts` — nothing else should be
- * exported from this file besides the three Server Actions below.
+ * exported from this file besides the three Server Actions below and
+ * `assertContentTaskOwnership` (also an async function, so it's a valid
+ * export under the same rule).
+ *
+ * `assertContentTaskOwnership` is exported so Phase 7's AI caption
+ * action (`lib/supabase/post-ai-actions.ts`) can reuse the exact same
+ * ownership check instead of duplicating it.
  */
 
 async function requireAuthenticatedUserId(): Promise<string> {
@@ -54,7 +60,7 @@ async function requireAuthenticatedUserId(): Promise<string> {
  * level in the ownership chain
  * (post -> content task -> campaign -> client -> agency).
  */
-async function assertContentTaskOwnership(contentTaskId: number): Promise<{
+export async function assertContentTaskOwnership(contentTaskId: number): Promise<{
   ok: boolean;
   error: string | null;
 }> {
